@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>METTA AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-main: #000000; --text-main: #ffffff; --text-muted: #9ca3af; --bg-surface: #1c1c1e;
+            --border-color: rgba(255, 255, 255, 0.12); --bg-user-msg: #1c1c1e; --bg-inverted: #ffffff;
+            --text-inverted: #000000; --bg-hover: rgba(255, 255, 255, 0.1); --bg-input-idle: #1c1c1e;
+            --bg-input-focus: #1c1c1e; --blur-1: rgba(0, 0, 0, 0.4); --blur-2: rgba(0, 0, 0, 0); --bg-code: #0a0a0c;
+            --shadow-focus: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+        body.light-theme {
+            --bg-main: #ffffff; --text-main: #000000; --text-muted: #6b7280; --bg-surface: #ffffff;
+            --border-color: #d1d5db; --bg-user-msg: #f3f4f6; --bg-inverted: #000000; --text-inverted: #ffffff;
+            --bg-hover: rgba(0, 0, 0, 0.05); --bg-input-idle: #f3f4f6; --bg-input-focus: #ffffff;
+            --blur-1: rgba(255, 255, 255, 0.9); --blur-2: rgba(255, 255, 255, 0); --bg-code: #f9fafb;
+            --shadow-focus: 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+        body { background-color: var(--bg-main); color: var(--text-main); transition: background-color 0.3s, color 0.3s; font-family: sans-serif; margin: 0; height: 100dvh; overflow: hidden; }
+        @keyframes soft-bounce { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 4px); } }
+        .animate-soft-bounce { animation: soft-bounce 2s infinite; }
+        textarea::-webkit-scrollbar { display: none; } textarea { scrollbar-width: none; }
+        .header-blur { background: linear-gradient(to bottom, var(--blur-1) 0px, var(--blur-1) 32px, var(--blur-2) 72px); }
+        
+        .smooth-transition {
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .input-wrapper-transition {
+            transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        padding-left 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+            width: 100%;
+            padding-left: 52px;
+            will-change: width, padding-left, background-color, border-color, box-shadow;
+        }
+        
+        .input-wrapper-transition.focused {
+            width: calc(100% - 60px) !important;
+            padding-left: 12px !important;
+            background-color: var(--bg-input-focus) !important;
+            box-shadow: var(--shadow-focus) !important;
+        }
+
+        .plus-btn-transition {
+            transition: background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                        color 0.3s ease;
+            will-change: background-color, border-color, box-shadow, transform, opacity;
+        }
+
+        .plus-btn-transition.focused {
+            background-color: var(--bg-input-focus) !important;
+            border-color: var(--border-color) !important;
+            box-shadow: var(--shadow-focus) !important;
+        }
+
+        @keyframes slideUpFade {
+            from {
+                opacity: 0;
+                transform: translateY(14px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        .message-appear {
+            animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="flex flex-col relative">
+
+    <div id="toast" class="fixed top-24 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full shadow-2xl font-bold smooth-transition opacity-0 scale-95 pointer-events-none text-center max-w-[90%] transition-all duration-300"></div>
+
+    <div id="headerBlur" class="absolute top-0 left-0 right-0 h-24 pointer-events-none z-20 header-blur transition-all duration-300"></div>
+
+    <header class="absolute top-0 left-0 right-0 flex justify-between items-center p-4 z-30 pointer-events-none">
+        <button onclick="toggleDrawer()" class="w-12 h-12 rounded-full flex items-center justify-center border-2 border-[var(--border-color)] bg-[var(--bg-surface)] opacity-80 backdrop-blur-sm pointer-events-auto transition-colors hover:bg-[var(--bg-hover)] active:scale-95 shadow-sm">
+            <i data-lucide="menu" class="w-6 h-6 text-[var(--text-main)]"></i>
+        </button>
+        <button onclick="startNewChat()" class="w-12 h-12 rounded-full flex items-center justify-center border-2 border-[var(--border-color)] bg-[var(--bg-surface)] opacity-80 backdrop-blur-sm pointer-events-auto transition-colors hover:bg-[var(--bg-hover)] active:scale-95 shadow-sm">
+            <i data-lucide="square-pen" class="w-6 h-6 text-[var(--text-main)]"></i>
+        </button>
+    </header>
+
+    <div id="drawerOverlay" onclick="toggleDrawer()" class="fixed inset-0 bg-black/60 z-40 opacity-0 pointer-events-none transition-opacity duration-500"></div>
+    <div id="drawer" class="fixed inset-y-0 left-0 w-72 bg-[var(--bg-surface)] border-r-2 border-[var(--border-color)] rounded-r-3xl z-50 p-6 flex flex-col transform -translate-x-full transition-transform duration-500 ease-in-out">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-xl font-bold tracking-wide text-[var(--text-main)]">METTA AI</h2>
+            <button onclick="openSettings()" class="p-2 rounded-full transition-colors text-[var(--text-muted)] hover:bg-[var(--bg-hover)]">
+                <i data-lucide="settings" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <p class="text-sm text-[var(--text-muted)] mb-3 px-2 uppercase font-bold">предыдущие чаты</p>
+        <button onclick="startNewChat()" class="flex items-center space-x-3 py-3 px-4 rounded-2xl transition-colors mb-4 w-full bg-[var(--bg-hover)] hover:bg-[var(--border-color)] text-[var(--text-main)]">
+            <i data-lucide="square-pen" class="w-5 h-5 text-[var(--text-muted)]"></i>
+            <span class="font-bold">Новый чат</span>
+        </button>
+        <div id="chatHistoryList" class="flex flex-col space-y-1 overflow-y-auto flex-1 pr-2"></div>
+    </div>
+
+    <div id="settingsScreen" class="fixed inset-0 z-[60] bg-[var(--bg-main)] flex flex-col transform translate-x-full transition-transform duration-300 overflow-y-auto">
+        <header class="flex items-center px-2 pt-2 pb-4 h-16 border-b-2 border-[var(--border-color)]">
+            <button onclick="closeSettings()" class="p-2 rounded-full hover:bg-[var(--bg-hover)]">
+                <i data-lucide="chevron-left" class="w-8 h-8 text-[var(--text-main)]" stroke-width="1.5"></i>
+            </button>
+            <h1 class="text-xl font-bold ml-2 text-[var(--text-main)]">Настройки</h1>
+        </header>
+        
+        <div class="flex flex-col p-4 space-y-4">
+            <div onclick="openSettingOverlay('theme')" class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] cursor-pointer active:scale-[0.98] transition-transform shadow-sm">
+                <span class="text-[17px] font-bold text-[var(--text-main)]">Тема чата</span>
+                <div class="flex items-center space-x-2 text-[var(--text-muted)]">
+                    <span id="label-theme" class="text-[16px] font-bold">Темная</span>
+                    <i data-lucide="chevron-right" class="w-5 h-5 opacity-50"></i>
+                </div>
+            </div>
+            
+            <div onclick="openSettingOverlay('model')" class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] cursor-pointer active:scale-[0.98] transition-transform shadow-sm">
+                <span class="text-[17px] font-bold text-[var(--text-main)]">Модель</span>
+                <div class="flex items-center space-x-2 text-[var(--text-muted)]">
+                    <span id="label-model" class="text-[16px] font-bold">Gemini</span>
+                    <i data-lucide="chevron-right" class="w-5 h-5 opacity-50"></i>
+                </div>
+            </div>
+            
+            <div onclick="openSettingOverlay('length')" class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] cursor-pointer active:scale-[0.98] transition-transform shadow-sm">
+                <span class="text-[17px] font-bold text-[var(--text-main)]">Длина текста</span>
+                <div class="flex items-center space-x-2 text-[var(--text-muted)]">
+                    <span id="label-length" class="text-[16px] font-bold">Средний</span>
+                    <i data-lucide="chevron-right" class="w-5 h-5 opacity-50"></i>
+                </div>
+            </div>
+            
+            <div class="flex flex-col p-4 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] shadow-sm">
+                <span class="text-[17px] font-bold mb-3 text-[var(--text-main)]">Системный Промпт</span>
+                <textarea id="promptInput" class="w-full min-h-[100px] p-3 rounded-xl bg-[var(--bg-code)] text-[var(--text-main)] outline-none resize-none font-medium">Ты полезный, умный и креативный ассистент.</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingOverlay" class="fixed inset-0 z-[70] flex-col justify-end hidden">
+        <div class="absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-300" id="settingOverlayBg" onclick="closeSettingOverlay()"></div>
+        <div id="settingOverlayPanel" class="rounded-t-[32px] p-6 relative z-10 bg-[var(--bg-surface)] border-t-2 border-[t-2 border-[var(--border-color)] transform translate-y-full transition-transform duration-300 pb-10">
+            <div class="w-12 h-1.5 rounded-full mx-auto mb-6 bg-[var(--border-color)]"></div>
+            <div id="settingOptionsContainer" class="flex flex-col space-y-2"></div>
+        </div>
+    </div>
+
+    <main id="chatContainer" class="flex-1 overflow-y-auto px-4 flex flex-col scroll-smooth justify-center">
+        <div id="greeting" class="text-center">
+            <h1 class="text-4xl font-bold mb-2 text-[var(--text-main)]">Привет!</h1>
+            <p class="text-xl text-[var(--text-muted)]">чем могу помочь?</p>
+        </div>
+        <div id="messagesList" class="flex flex-col space-y-6 pb-10 w-full max-w-3xl mx-auto pt-24 hidden"></div>
+        <div id="loadingIndicator" class="hidden w-full max-w-3xl mx-auto pt-4 pb-4 transition-opacity">
+            <div class="flex space-x-1.5 h-8 pl-2 items-center">
+                <div class="w-2 h-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 0ms"></div>
+                <div class="w-2 h-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 150ms"></div>
+                <div class="w-2 h-2 rounded-full bg-[var(--text-muted)] animate-bounce" style="animation-delay: 300ms"></div>
+            </div>
+        </div>
+        <div id="messagesEnd"></div>
+    </main>
+
+    <div class="px-4 pb-6 pt-2 z-30 max-w-3xl mx-auto w-full mt-auto relative">
+        <div class="relative w-full flex justify-end items-end min-h-[52px]">
+            <button id="scrollDownBtn" onclick="scrollToBottom()" class="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-2 border-[var(--border-color)] flex items-center justify-center shadow-lg smooth-transition z-40 bg-[var(--bg-surface)] opacity-0 scale-75 pointer-events-none">
+                <i data-lucide="chevron-down" class="w-5 h-5 text-[var(--text-muted)]"></i>
+            </button>
+            <div id="attachmentsPreview" class="absolute bottom-full left-0 right-0 flex gap-3 mb-3 p-3 rounded-2xl overflow-x-auto border-2 border-[var(--border-color)] bg-[var(--bg-surface)] hidden"></div>
+
+            <div id="plusMenu" class="absolute bottom-full mb-3 left-0 w-64 rounded-[24px] p-2 z-50 transform origin-bottom-left border-2 border-[var(--border-color)] shadow-2xl bg-[var(--bg-surface)]/95 opacity-0 scale-95 pointer-events-none backdrop-blur-xl smooth-transition">
+                <input type="file" accept="image/*" capture="environment" id="cameraInput" class="hidden" onchange="handleFileChange(event)">
+                <input type="file" accept="image/*" multiple id="galleryInput" class="hidden" onchange="handleFileChange(event)">
+                <input type="file" multiple id="fileInput" class="hidden" onchange="handleFileChange(event)">
+                <div class="flex flex-col space-y-0.5">
+                    <button onclick="document.getElementById('cameraInput').click()" class="flex items-center space-x-3.5 py-3 px-4 rounded-2xl text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors">
+                        <i data-lucide="camera" class="w-5.5 h-5.5 shrink-0 text-[var(--text-muted)]"></i><span class="text-[16px] font-bold">Камера</span>
+                    </button>
+                    <button onclick="document.getElementById('galleryInput').click()" class="flex items-center space-x-3.5 py-3 px-4 rounded-2xl text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors">
+                        <i data-lucide="image" class="w-5.5 h-5.5 shrink-0 text-[var(--text-muted)]"></i><span class="text-[16px] font-bold">Галерея</span>
+                    </button>
+                    <button onclick="document.getElementById('fileInput').click()" class="flex items-center space-x-3.5 py-3 px-4 rounded-2xl text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors">
+                        <i data-lucide="folder-open" class="w-5.5 h-5.5 shrink-0 text-[var(--text-muted)]"></i><span class="text-[16px] font-bold">Файлы</span>
+                    </button>
+                </div>
+            </div>
+
+            <button id="plusBtn" onclick="togglePlusMenu()" class="absolute left-0 bottom-0 flex items-center justify-center rounded-full z-20 w-[52px] h-[52px] bg-transparent text-[var(--text-muted)] hover:text-[var(--text-main)] border-2 border-transparent plus-btn-transition">
+                <i id="plusIcon" data-lucide="plus" class="w-6 h-6 smooth-transition"></i>
+            </button>
+
+            <div id="inputWrapper" class="relative flex items-end min-h-[52px] rounded-[26px] z-10 w-full pl-[52px] bg-[var(--bg-input-idle)] border-2 border-[var(--border-color)] shadow-2xl input-wrapper-transition">
+                <textarea id="chatInput" rows="1" placeholder="Спросить METTA..." class="flex-1 bg-transparent border-none outline-none text-[16px] pr-2 py-[15px] resize-none block text-[var(--text-main)] placeholder-[var(--text-muted)]" style="min-height: 52px;"></textarea>
+                <button id="sendBtn" onclick="handleSendMessage()" disabled class="w-[40px] h-[40px] mb-[6px] mr-1.5 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-hover)] text-[var(--text-muted)] scale-90 opacity-40 smooth-transition">
+                    <i data-lucide="arrow-up" class="w-5 h-5 smooth-transition" stroke-width="2.5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Сообщаем Telegram Mini App, что интерфейс готов к работе
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand(); // Раскрываем Mini App на весь экран телефона
+        }
+
+        // ==========================================================
+        // КРИТИЧЕСКАЯ НАСТРОЙКА: АДРЕС ТВОЕГО ПИТОН-БЭКЕНДА
+        // Замени локальный адрес на постоянную ссылку от Render, когда задеплоишь!
+        // ==========================================================
+        const BACKEND_URL = "http://127.0.0.1:5000"; 
+
+        lucide.createIcons();
+        let isDrawerOpen = false, isPlusMenuOpen = false, isSettingsOpen = false, activeSettingOverlay = null;
+        let messages = [], chatHistory = [], currentChatId = null, attachments = [], isLight = false;
+        let toastTimeout = null;
+        
+        let settings = { 
+            theme: 'dark', 
+            model: 'gemini', 
+            length: 'medium', 
+            prompt: 'Ты полезный, умный и креативный ассистент.' 
+        };
+        
+        const OPTIONS = {
+            theme: [{ id: 'dark', label: 'Темная' }, { id: 'light', label: 'Светлая' }],
+            model: [
+                { id: 'gemini', label: 'Gemini' }, 
+                { id: 'chatgpt', label: 'ChatGPT' }, 
+                { id: 'deepseek', label: 'DeepSeek' },
+                { id: 'qwen', label: 'Qwen' }
+            ],
+            length: [{ id: 'medium', label: 'Средний' }, { id: 'short', label: 'Короткий' }, { id: 'long', label: 'Длинный' }]
+        };
+
+        const input = document.getElementById('chatInput'), inputWrapper = document.getElementById('inputWrapper'), plusBtn = document.getElementById('plusBtn'), plusIcon = document.getElementById('plusIcon'), plusMenu = document.getElementById('plusMenu'), sendBtn = document.getElementById('sendBtn'), chatContainer = document.getElementById('chatContainer'), messagesList = document.getElementById('messagesList'), greeting = document.getElementById('greeting'), messagesEnd = document.getElementById('messagesEnd'), loadingIndicator = document.getElementById('loadingIndicator'), scrollDownBtn = document.getElementById('scrollDownBtn'), attachmentsPreview = document.getElementById('attachmentsPreview');
+
+        input.addEventListener('input', function() {
+            this.style.height = '52px';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            this.style.overflowY = this.scrollHeight > 120 ? 'auto' : 'hidden';
+            updateSendBtn();
+        });
+
+        input.addEventListener('focus', () => {
+            inputWrapper.classList.add('focused');
+            plusBtn.classList.add('focused');
+            if(isPlusMenuOpen) togglePlusMenu();
+        });
+
+        input.addEventListener('blur', () => {
+            inputWrapper.classList.remove('focused');
+            plusBtn.classList.remove('focused');
+        });
+
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.innerText = text;
+            
+            toast.style.backgroundColor = isLight ? '#ef4444' : '#b91c1c';
+            toast.style.color = '#ffffff';
+            
+            toast.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'scale-100', 'pointer-events-auto');
+                toast.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            }, 3000);
+        }
+
+        function updateSendBtn() {
+            if (input.value.trim() || attachments.length > 0) {
+                sendBtn.disabled = false; 
+                sendBtn.className = "w-[40px] h-[40px] mb-[6px] mr-1.5 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-inverted)] text-[var(--text-inverted)] active:scale-90 scale-100 opacity-100 smooth-transition shadow-sm";
+            } else {
+                sendBtn.disabled = true; 
+                sendBtn.className = "w-[40px] h-[40px] mb-[6px] mr-1.5 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-hover)] text-[var(--text-muted)] scale-90 opacity-40 smooth-transition pointer-events-none";
+            }
+        }
+
+        function updatePlusBtnState() {
+            if (settings.model === 'deepseek') {
+                plusBtn.classList.add('opacity-30', 'cursor-not-allowed');
+            } else {
+                plusBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+            }
+        }
+
+        function togglePlusMenu() {
+            if (settings.model === 'deepseek') {
+                showToast('DeepSeek не поддерживает файлы и изображения');
+                return;
+            }
+            
+            isPlusMenuOpen = !isPlusMenuOpen;
+            if (isPlusMenuOpen) { 
+                if (document.activeElement === input) input.blur(); 
+                plusMenu.classList.replace('opacity-0', 'opacity-100'); 
+                plusMenu.classList.replace('scale-95', 'scale-100'); 
+                plusMenu.classList.replace('pointer-events-none', 'pointer-events-auto'); 
+                plusIcon.classList.add('rotate-45', 'text-[var(--text-main)]'); 
+            } 
+            else { 
+                plusMenu.classList.replace('opacity-100', 'opacity-0'); 
+                plusMenu.classList.replace('scale-100', 'scale-95'); 
+                plusMenu.classList.replace('pointer-events-auto', 'pointer-events-none'); 
+                plusIcon.classList.remove('rotate-45', 'text-[var(--text-main)]'); 
+            }
+        }
+
+        function toggleDrawer() {
+            isDrawerOpen = !isDrawerOpen;
+            if (isDrawerOpen) { document.getElementById('drawer').classList.replace('-translate-x-full', 'translate-x-0'); document.getElementById('drawerOverlay').classList.replace('opacity-0', 'opacity-100'); document.getElementById('drawerOverlay').classList.replace('pointer-events-none', 'pointer-events-auto'); } 
+            else { document.getElementById('drawer').classList.replace('translate-x-0', '-translate-x-full'); document.getElementById('drawerOverlay').classList.replace('opacity-100', 'opacity-0'); document.getElementById('drawerOverlay').classList.replace('pointer-events-auto', 'pointer-events-none'); }
+        }
+
+        function scrollToBottom() { messagesEnd.scrollIntoView({ behavior: 'smooth' }); }
+        chatContainer.addEventListener('scroll', () => {
+            const isScrolledUp = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight > 150;
+            if (isScrolledUp && !isPlusMenuOpen) { scrollDownBtn.classList.replace('opacity-0', 'opacity-100'); scrollDownBtn.classList.replace('scale-75', 'scale-100'); scrollDownBtn.classList.replace('pointer-events-none', 'pointer-events-auto'); scrollDownBtn.classList.add('animate-soft-bounce'); } 
+            else { scrollDownBtn.classList.replace('opacity-100', 'opacity-0'); scrollDownBtn.classList.replace('scale-100', 'scale-75'); scrollDownBtn.classList.replace('pointer-events-auto', 'pointer-events-none'); scrollDownBtn.classList.remove('animate-soft-bounce'); }
+        });
+
+        function handleFileChange(event) {
+            if (settings.model === 'deepseek') {
+                showToast('DeepSeek не поддерживает файлы и изображения');
+                event.target.value = null;
+                return;
+            }
+            
+            Array.from(event.target.files).forEach(f => attachments.push({ id: Date.now()+Math.random(), file: f, name: f.name, type: f.type.startsWith('image/') ? 'image' : 'file', url: URL.createObjectURL(f) }));
+            event.target.value = null; if (isPlusMenuOpen) togglePlusMenu();
+            renderAttachments(); updateSendBtn();
+        }
+
+        function removeAttachment(id) { attachments = attachments.filter(a => a.id !== id); renderAttachments(); updateSendBtn(); }
+
+        function renderAttachments() {
+            if (!attachments.length) { attachmentsPreview.classList.add('hidden'); attachmentsPreview.innerHTML = ''; return; }
+            attachmentsPreview.classList.remove('hidden');
+            attachmentsPreview.innerHTML = attachments.map(att => `<div class="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-black/40 border-2 border-[var(--border-color)] group">${att.type === 'image' ? `<img src="${att.url}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex flex-col items-center justify-center text-xs text-[var(--text-main)] p-1"><i data-lucide="folder-open" class="w-6 h-6 mb-1 text-[var(--text-muted)]"></i><span class="truncate w-full text-center">${att.name}</span></div>`}<button onclick="removeAttachment(${att.id})" class="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"><i data-lucide="x" class="w-3 h-3"></i></button></div>`).join('');
+            lucide.createIcons();
+        }
+
+        function openSettings() { isSettingsOpen = true; document.getElementById('settingsScreen').classList.replace('translate-x-full', 'translate-x-0'); toggleDrawer(); }
+        
+        function closeSettings() { 
+            isSettingsOpen = false; 
+            document.getElementById('settingsScreen').classList.replace('translate-x-0', 'translate-x-full'); 
+            settings.prompt = document.getElementById('promptInput').value; 
+        }
+        
+        function openSettingOverlay(type) {
+            activeSettingOverlay = type;
+            document.getElementById('settingOverlay').classList.remove('hidden'); document.getElementById('settingOverlay').classList.add('flex');
+            setTimeout(() => { document.getElementById('settingOverlayBg').classList.replace('opacity-0', 'opacity-100'); document.getElementById('settingOverlayPanel').classList.replace('translate-y-full', 'translate-y-0'); }, 10);
+            document.getElementById('settingOptionsContainer').innerHTML = OPTIONS[type].map(opt => `<button onclick="handleSelectSetting('${type}', '${opt.id}')" class="flex items-center justify-between w-full py-4 px-2 rounded-xl transition-colors hover:bg-[var(--bg-hover)]"><span class="text-[17px] font-bold ${settings[type] === opt.id ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'}">${opt.label}</span>${settings[type] === opt.id ? `<i data-lucide="check" class="w-6 h-6 text-[var(--text-main)]" stroke-width="2"></i>` : ''}</button>`).join('');
+            lucide.createIcons();
+        }
+
+        function closeSettingOverlay() {
+            document.getElementById('settingOverlayBg').classList.replace('opacity-100', 'opacity-0'); document.getElementById('settingOverlayPanel').classList.replace('translate-y-0', 'translate-y-full');
+            setTimeout(() => { document.getElementById('settingOverlay').classList.add('hidden'); document.getElementById('settingOverlay').classList.remove('flex'); activeSettingOverlay = null; }, 300);
+        }
+
+        function handleSelectSetting(type, id) { 
+            settings[type] = id; 
+            document.getElementById(`label-${type}`).innerText = OPTIONS[type].find(o => o.id === id).label; 
+            closeSettingOverlay(); 
+            
+            if (type === 'theme') applyTheme();
+            
+            if (type === 'model') {
+                updatePlusBtnState();
+                if (id === 'deepseek' && attachments.length > 0) {
+                    attachments = [];
+                    renderAttachments();
+                    updateSendBtn();
+                    showToast('Вложения очищены, так как DeepSeek их не поддерживает');
+                }
+            }
+        }
+        
+        function applyTheme() { isLight = settings.theme === 'light'; document.body.className = isLight ? 'flex flex-col relative light-theme' : 'flex flex-col relative'; }
+
+        function copyCode(btn, code) {
+            navigator.clipboard.writeText(decodeURIComponent(code)).then(() => {
+                const html = btn.innerHTML; btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i><span>Скопировано</span>`; lucide.createIcons();
+                setTimeout(() => { btn.innerHTML = html; lucide.createIcons(); }, 2000);
+            });
+        }
+
+        function parseMessageText(text) {
+            return text.split(/(`````[\s\S]*?`````|```[\s\S]*?```)/g).map(part => {
+                if (part.startsWith('```')) {
+                    const codeContent = part.replace(/`{3,5}(?:\w+)?\n?/g, '').replace(/`{3,5}$/g, '').trim();
+                    const safeCode = codeContent.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `<div class="mt-3 mb-3 rounded-[16px] overflow-hidden border-2 border-[var(--border-color)] bg-[var(--bg-code)] shadow-sm"><div class="flex justify-between items-center px-4 py-2 border-b-2 border-[var(--border-color)] bg-[var(--bg-surface)]"><span class="text-xs font-mono text-[var(--text-muted)]">CODE</span><button onclick="copyCode(this, '${encodeURIComponent(codeContent)}')" class="flex items-center space-x-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"><i data-lucide="copy" class="w-4 h-4"></i><span>Скопировать код</span></button></div><div class="p-4 overflow-x-auto"><pre class="text-sm font-mono text-[var(--text-main)]"><code>${safeCode}</code></pre></div></div>`;
+                }
+                return `<span class="whitespace-pre-wrap">${part}</span>`;
+            }).join('');
+        }
+
+        function renderMessages() {
+            if (!messages.length) { greeting.classList.remove('hidden'); messagesList.classList.add('hidden'); return; }
+            greeting.classList.add('hidden'); messagesList.classList.remove('hidden');
+            messagesList.innerHTML = messages.map((msg, index) => {
+                const isUser = msg.sender === 'user';
+                const isLatest = index === messages.length - 1;
+                const animationClass = isLatest ? 'message-appear opacity-0' : '';
+                
+                let attHtml = '';
+                if (msg.attachments?.length) {
+                    attHtml = `<div class="flex flex-wrap gap-2 mb-2">${msg.attachments.map(att => `<div class="w-16 h-16 rounded-xl bg-black/20 overflow-hidden border-2 border-white/10 shadow-sm">${att.type === 'image' ? `<img src="${att.url}" class="w-full h-full object-cover"/>` : `<div class="w-full h-full flex flex-col items-center justify-center text-xs text-center p-1 bg-gray-800 text-white"><i data-lucide="folder-open" class="w-5 h-5 mb-1"></i><span class="truncate w-full">${att.name}</span></div>`}</div>`).join('')}</div>`;
+                }
+                
+                return `
+                <div class="flex w-full ${isUser ? 'justify-end' : 'justify-start'} ${animationClass}">
+                    <div class="${isUser ? 'px-5 py-3 rounded-[20px] rounded-br-[4px] max-w-[85%] text-[16px] border-2 bg-[var(--bg-user-msg)] text-[var(--text-main)] border-[var(--border-color)] shadow-md leading-relaxed' : 'text-[16px] max-w-[95%] pl-2 text-[var(--text-main)] leading-relaxed'}">
+                        ${attHtml}
+                        ${isUser ? msg.text.replace(/\n/g, '<br/>') : parseMessageText(msg.text)}
+                    </div>
+                </div>`;
+            }).join('');
+            lucide.createIcons(); setTimeout(scrollToBottom, 50);
+        }
+
+        function renderChatHistory() {
+            document.getElementById('chatHistoryList').innerHTML = chatHistory.map(chat => `<button onclick="selectChat(${chat.id})" class="text-left py-3 px-3 rounded-2xl truncate text-sm w-full font-bold transition-colors ${chat.id === currentChatId ? 'bg-[var(--bg-hover)] text-[var(--text-main)] border-2 border-[var(--border-color)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}">${chat.title}</button>`).join('');
+        }
+
+        function startNewChat(shouldCloseDrawer = true) {
+            if (messages.length) {
+                const title = messages.find(m => m.sender === 'user')?.text.slice(0, 25) + '...';
+                const idx = chatHistory.findIndex(c => c.id === currentChatId);
+                if (idx === -1) chatHistory.unshift({ id: currentChatId || Date.now(), title, messages }); else chatHistory[idx].messages = messages;
+            }
+            messages = []; currentChatId = null; attachments = []; renderMessages(); renderChatHistory(); renderAttachments(); updateSendBtn(); 
+            if (shouldCloseDrawer && isDrawerOpen) toggleDrawer();
+        }
+
+        function selectChat(id) {
+            const chat = chatHistory.find(c => c.id === id); if(!chat) return;
+            startNewChat(false); 
+            messages = [...chat.messages]; currentChatId = chat.id; renderMessages(); 
+            if (isDrawerOpen) toggleDrawer(); 
+        }
+
+        async function handleSendMessage() {
+            const text = input.value.trim();
+            if (!text && attachments.length === 0) return;
+            
+            settings.prompt = document.getElementById('promptInput').value;
+
+            let chatId = currentChatId || Date.now();
+            currentChatId = chatId;
+
+            messages.push({ id: Date.now(), text: text, sender: 'user', attachments: [...attachments] });
+            input.value = ''; input.style.height = '52px'; attachments = [];
+            renderAttachments(); updateSendBtn(); renderMessages();
+            
+            const title = messages.find(m => m.sender === 'user')?.text.slice(0, 25) + '...';
+            const idx = chatHistory.findIndex(c => c.id === chatId);
+            if (idx === -1) chatHistory.unshift({ id: chatId, title, messages: [...messages] }); else chatHistory[idx].messages = [...messages];
+            renderChatHistory();
+
+            loadingIndicator.classList.remove('hidden'); scrollToBottom();
+
+            try {
+                // Используем глобальную переменную BACKEND_URL вместо захардкоженного адреса
+                const response = await fetch(`${BACKEND_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, model: settings.model, prompt: settings.prompt, length: settings.length, history: messages.slice(0, -1) })
+                });
+
+                if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    messages.push({ id: Date.now() + 1, text: data.reply, sender: 'ai' });
+                } else {
+                    throw new Error(data.reply || "Неизвестная ошибка сервера");
+                }
+            } catch (error) {
+                const errorMsg = `<span style="color: #ef4444; font-weight: bold;">🚨 Ошибка связи</span>\n\nНе удалось установить соединение с сервером.\n\nУбедитесь, что бэкенд запущен и адрес указан верно.\n\n\`${error.message}\``;
+                messages.push({ id: Date.now() + 1, text: errorMsg, sender: 'ai' });
+            } finally {
+                loadingIndicator.classList.add('hidden'); renderMessages();
+                const idx2 = chatHistory.findIndex(c => c.id === chatId);
+                if (idx2 !== -1) chatHistory[idx2].messages = [...messages];
+            }
+        }
+
+        applyTheme();
+        updatePlusBtnState();
+    </script>
+</body>
+</html>
