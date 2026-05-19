@@ -223,7 +223,7 @@
         // СЮДА ВСТАВЛЯЙ СВОЮ ССЫЛКУ ИЗ ТЕРМИНАЛА PYDROID 3 (БЕЗ / НА КОНЦЕ)
         // Пример: const BACKEND_URL = "https://random-words.lhr.life";
         // ==========================================================
-        const BACKEND_URL = "http://10.0.0.1:5000"; 
+        const BACKEND_URL = "http://127.0.0.1:5000"; 
 
         lucide.createIcons();
         let isDrawerOpen = false, isPlusMenuOpen = false, isSettingsOpen = false, activeSettingOverlay = null;
