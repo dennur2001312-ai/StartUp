@@ -34,10 +34,10 @@ def chat():
         # Сопоставляем внутренние имена моделей из HTML с официальными ID моделей в AITUNNEL
         # (Если имена моделей в AITUNNEL изменятся, просто поправь правые значения)
         model_mapping = {
-            "gemini": "gemini-pro",         
+            "gemini": "gemini-2.5-flash-lite",         
             "chatgpt": "gpt-4o-mini",       
             "deepseek": "deepseek-chat",    
-            "qwen": "qwen-max"              
+            "qwen": "qwen3.5-9b"              
         }
         
         target_model = model_mapping.get(model_type, model_type)
